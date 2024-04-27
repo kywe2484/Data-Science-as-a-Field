@@ -1,0 +1,168 @@
+---
+title: "New York Shooting Incident Project"
+author: "Kyle"
+date: "2024-04-26"
+output:
+  pdf_document: default
+  html_document: default
+---
+***
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Introduction
+
+To better understand the nature of violent crime, I will analyze the sex and age demographics of shooting incidents in New York City. I am primarily interested in identifying the most likely perpetrators of shooting incidents.
+
+I will utilize a public data set from the NYPD that lists every shooting incident that occurred in NYC going back to 2006 through the end of the previous calendar year. This data is manually extracted every quarter and reviewed by the Office of Management Analysis and Planning before being posted on the NYPD website. Each record represents a shooting incident in NYC and includes information about the event, the location and time of occurrence. In addition, information related to suspect and victim demographics is also included. This data can be used by the public to explore the nature of shooting/criminal activity.
+
+## Packages and Data Import
+
+I will import the data using the tidyverse package and the read.csv function.
+Here is the code for importing the data. Within this code I am also setting up the data to deal with unknowns/bad data.
+
+```{r data_import, warning=FALSE}
+library(tidyverse)
+shooting_incidents <- 
+  read.csv("https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD",
+           na.strings = c("", "(null)", "UNKNOWN", "U", 940, 224, 1028, 1020, 1022))
+```
+
+## Tidy and Transform
+
+Here is a summary of the data set prior to tidying and transforming. As you can see, the data set contains a lot of information but it is not all necessary or useful for data visualization and modeling. Many variables have their class set to character with is not useful. There are also some confusion regarding NA's, unknowns, or blanks. I'll need to deal with these issues by transforming the data
+
+### Raw Summary
+```{r intial_sumamry}
+summary(shooting_incidents)
+```
+### Deal with missing data
+I'll assign all of the values I designated as NA when importing to NA.
+```{r unknowns}
+shooting_incidents[is.na(shooting_incidents)] <- "Unknown"
+```
+
+### Remove data
+I will tidy up the data by removing some of the columns from this data that will not be relevant to the analysis. I still won't use some of the remaining data but I want to get rid of some of the "least useful" data.
+
+```{r remove_data}
+shooting_incidents <- 
+  subset(shooting_incidents, select = -c(INCIDENT_KEY, LOC_OF_OCCUR_DESC,
+    PRECINCT, JURISDICTION_CODE, LOC_CLASSFCTN_DESC, X_COORD_CD, Y_COORD_CD, 
+    Latitude, Longitude, Lon_Lat))
+```
+### Change Data Class
+Most of the data is set to be a character class. I can clean things up by making them factor or logical classes. 
+
+```{r change_class}
+shooting_incidents$VIC_SEX <- as.factor(shooting_incidents$VIC_SEX)
+shooting_incidents$BORO <- as.factor(shooting_incidents$BORO)
+shooting_incidents$LOCATION_DESC <- as.factor(shooting_incidents$LOCATION_DESC)
+shooting_incidents$STATISTICAL_MURDER_FLAG <- 
+  as.logical(shooting_incidents$STATISTICAL_MURDER_FLAG)
+shooting_incidents$PERP_AGE_GROUP <- as.factor(shooting_incidents$PERP_AGE_GROUP)
+shooting_incidents$PERP_SEX <- as.factor(shooting_incidents$PERP_SEX)
+shooting_incidents$PERP_RACE <- as.factor(shooting_incidents$PERP_RACE)
+shooting_incidents$VIC_AGE_GROUP <- as.factor(shooting_incidents$VIC_AGE_GROUP)
+shooting_incidents$VIC_RACE <- as.factor(shooting_incidents$VIC_RACE)
+```
+
+### Tidy Summary
+Here is a summary of the data after I have tidied things up. There is some missing data particularly regarding the location description and the perpetrator description. These are essentially unknowns which makes a lot of since especially with perps. 
+
+```{r tidy_summary}
+summary(shooting_incidents)
+```
+
+## Visualizations and Analyses
+### Perpetrator Sex
+To start the analysis, I'll look at the sex of the perpetrators. I'll do this using the ggplot package which is included in tidyverse.
+```{r}
+summary(shooting_incidents$PERP_SEX)
+```
+
+```{r sex_plot}
+ggplot(data = shooting_incidents, aes(PERP_SEX))+
+  geom_bar(
+    color= "black",
+    fill = "blue",
+    alpha = 0.75
+  )+
+  ggtitle("Shooting Incident Perpetrator Sex", "NYC 2006-2023")+
+  xlab("Perpetrator Sex")+
+  ylab("Number of Incidents")
+```
+Next, I'll analyze this data a little bit. The visualization makes the majority perpetrator sex obvious but I want to put some numbers with it. What percentage of perpetrators are male and what percentage are female?
+```{r sex_percentage}
+total_incidents <- nrow(shooting_incidents)
+shooting_incidents <- shooting_incidents %>% 
+  mutate(male_perp = PERP_SEX == "M") %>% 
+  mutate(female_perp = PERP_SEX == "F") %>% 
+  mutate(unk_perp = PERP_SEX == "Unknown")
+
+male_incidents <- sum(shooting_incidents$male_perp)
+percentage_male <- (male_incidents / total_incidents) *100
+rounded_male <- round(percentage_male, 2)
+
+female_incidents <- sum(shooting_incidents$female_perp)
+percentage_female <- (female_incidents / total_incidents) *100
+rounded_female <- round(percentage_female, 2)
+
+unk_incidents <- sum(shooting_incidents$unk_perp)
+percentage_unk <- (unk_incidents / total_incidents) *100
+rounded_unk <- round(percentage_unk, 2)
+```
+The percentage of incidents with a known male perpetrator is `r rounded_male`%.
+Meanwhile, the percentage of incidents with a known female perpetrator is `r rounded_female`%. The percentage of perpetrators whose sex is unknown is `r rounded_unk`%. 
+
+### Male Perpetrator Age
+Unknowns are a part of this data set which could mean several things. Perhaps females are better at concealing their identity. However, common sense tells us this is likely not the case. The more likely scenario involves the chaos of these violent incidents making it challenging or even impossible to identify the sex of the perpetrator. As a result, an overwhelming majority of *known* perpetrators are male. To further this analysis, I'll take a look at male perpetrator age. To start I'll filter the data to just male perpetrators. 
+
+```{r filter_male, results=FALSE}
+shooting_incidents %>% 
+  filter(PERP_SEX == "M")
+```
+I'll visualize the age classes of male perpetrators below. 
+
+```{r age_plot}
+ggplot(shooting_incidents, aes(PERP_AGE_GROUP))+
+  geom_bar(
+    color = "black",
+    fill = "coral3",
+    alpha = 0.75
+  )+
+  ggtitle("Male Perpetrator Age Class", "NYC 2006-2023")+
+  xlab("Age Class")+
+  ylab("Number of Incidents")
+```
+
+
+Next, I'll determine whether or not the perp is a "young man" (Male, 18-24):
+```{r young_men}
+shooting_incidents <- shooting_incidents %>% 
+  mutate(young_men = ifelse(PERP_SEX == "M" & PERP_AGE_GROUP == "18-24", TRUE, FALSE))
+```
+
+How many of the incidents are known to have a "young man" perp?
+```{r percent_young_men}
+total_incidents <- nrow(shooting_incidents)
+young_men_incidents <- sum(shooting_incidents$young_men)
+percentage_young_men <- (young_men_incidents / total_incidents) *100
+rounded_young_men <- round(percentage_young_men, 2)
+```
+The percentage of incidents with a known young man perp is `r rounded_young_men`%
+I would be curious to do further analysis to break this out by race and/or by borough. Or look into the relationships between victim and perpetrator. Do young men shoot mostly other young men? 
+
+## Bias
+First, bias could be present in the data set itself. I know little about how the data was collected and this could create bias without me knowing it. This data must require some form of voluntary reporting so there is the potential for bias in that regard. This reporting also likely involved reporting by victims or witnesses to a crime. People in a high stress situation might not be a reliable judge of age or even sex if the the perpetrator was wearing a mask or other misleading clothing. This data is also police reporting data- not conviction data. So, we can say what type of individual is most likely to be identified as the perpetrator of a shooting in a police report. However, we cannot say that those individuals *actually* commit the most shootings. Even if we had conviction data, all that would tell us is the most likely type of individuals to be convicted. There is also the potential for some biased based on the existing demographics of the population. What if New York City's population is 99% young men? This is obviously not the case, but further analysis should look at existing demographics during the time period that this data was reported.
+
+<br>
+
+## Conclusion
+The results of my analysis show that in shooting incidents the perpetrator is identified as a man 56.61% of the time. The age class of male perpetrators is identified to be 18-24 21.92% of the time. This is the highest known age class reported. It is closely followed by the 25-44 age class but that is a much wider range of ages. This shows that "young men" (18-24) are the most likely to be identified as the perpetrator of a shooting in NYC. However, a more robust analysis might take more steps to define "young man" and other age categories. Further analysis also might include NYC population demographics and conviction data. 
+
+### Session Info
+```{r session}
+sessionInfo()
+```
+
